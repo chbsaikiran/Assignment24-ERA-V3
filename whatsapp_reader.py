@@ -1113,5 +1113,7 @@ if __name__ == "__main__":
     num_messages = 20
     print(f"Getting last {num_messages} messages from each chat")
     messages = read_whatsapp_messages(num_messages)
-    print(messages) 
+    print(messages)
+    with open("output.txt", "w", encoding="utf-8") as file:
+        file.write(messages)
     write_top_messages(messages) 
