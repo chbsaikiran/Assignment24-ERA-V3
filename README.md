@@ -1,46 +1,87 @@
 # WhatsApp Message Reader
 
-This script allows you to read WhatsApp Web messages between specified start and end times, organizing them by groups and individual chats.
+A Python script that automates reading WhatsApp Web messages using Selenium WebDriver. This script allows you to extract and save messages from both individual and group chats.
 
-## Prerequisites
+## Features
 
-1. Python 3.6 or higher
-2. Chrome browser installed
-3. Chrome WebDriver installed and in your system PATH
+- Automatically processes the first 3 chats from WhatsApp Web
+- Collects up to 20 messages from each chat
+- Handles both group and individual chats
+- Expands and captures full content of long messages
+- Maintains message order and formatting
+- Generates two output files:
+  - `output.txt`: Contains all messages from processed chats
+  - `top_messages.txt`: Contains the 4 lengthiest messages from each chat (while maintaining original message order)
 
-## Installation
+## Requirements
 
-1. Install the required dependencies:
-```bash
-pip install -r requirements.txt
-```
+- Python 3.x
+- Chrome browser installed
+- Required Python packages (install via pip):
+  - selenium
+  - undetected-chromedriver
+
+## How It Works
+
+1. **Setup and Login**:
+   - Opens WhatsApp Web in Chrome
+   - Waits for QR code scan (manual scan required)
+   - Verifies successful login
+
+2. **Chat Processing**:
+   - Processes the first 3 chats in your WhatsApp
+   - For each chat:
+     - Identifies if it's a group or individual chat
+     - Collects up to 20 recent messages
+     - Expands and captures full content of long messages
+     - Preserves sender information for group chats
+
+3. **Output Format**:
+   ```
+   Group: [Group Name]
+   Message0: [content]
+   Message1: [content]
+   ...
+
+   [Individual Name]:
+   Message0: [content]
+   Message1: [content]
+   ...
+   ```
+
+4. **Message Selection for top_messages.txt**:
+   - Takes the 4 longest messages from each chat
+   - Maintains the original order of messages
+   - If a chat has 4 or fewer messages, includes all of them
 
 ## Usage
 
-1. Import the function in your Python code:
-```python
-from whatsapp_reader import read_whatsapp_messages
-from datetime import datetime
+1. Install required packages:
+   ```bash
+   pip install selenium undetected-chromedriver
+   ```
 
-# Define your time range
-start_time = datetime(2024, 3, 1, 0, 0, 0)  # Year, Month, Day, Hour, Minute, Second
-end_time = datetime(2024, 3, 2, 0, 0, 0)
+2. Run the script:
+   ```bash
+   python whatsapp_reader.py
+   ```
 
-# Call the function
-messages = read_whatsapp_messages(start_time, end_time)
-print(messages)
-```
+3. When prompted:
+   - Scan the QR code with your WhatsApp mobile app
+   - Wait for the script to process messages
 
-2. When you run the script:
-   - It will open Chrome browser and navigate to WhatsApp Web
-   - Scan the QR code when prompted
-   - The script will automatically collect messages within the specified time range
-   - Messages will be returned as a string with group messages followed by individual chat messages
+4. Check output files:
+   - `output.txt`: Contains all collected messages
+   - `top_messages.txt`: Contains the 4 lengthiest messages per chat
 
-## Notes
+## Limitations
 
-- The script requires you to scan the WhatsApp Web QR code to access your messages
-- Only text messages are collected (attachments and links are ignored)
-- Messages are organized by chat type (groups first, then individual chats)
-- Each message includes the sender's name and timestamp
-- The browser will automatically close after collecting messages 
+- Requires manual QR code scanning
+- Processes only the first 3 chats
+- Depends on WhatsApp Web's HTML structure
+- Chrome browser must be installed
+- Requires active internet connection
+
+## Note
+
+This script is for educational purposes only. Please ensure you have permission to access and store the messages you're collecting. 
