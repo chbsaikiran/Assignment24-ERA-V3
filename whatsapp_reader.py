@@ -880,7 +880,7 @@ def read_whatsapp_messages(num_messages=10):
                     # Process messages
                     chat_messages = []
                     processed_messages = 0
-                    
+
                     for message in messages:
                         try:
                             # Get message text
@@ -901,7 +901,7 @@ def read_whatsapp_messages(num_messages=10):
                                     pass
                             
                             # Add the message
-                            chat_messages.append(f"{sender}: {message_text}")
+                            chat_messages.append(f"Message{processed_messages}: {message_text}")
                             processed_messages += 1
                             
                         except Exception as e:
@@ -945,8 +945,8 @@ def read_whatsapp_messages(num_messages=10):
                     print(f"Error processing chat {index}: {str(e)}")
                     continue
 
-                if index == 2:
-                    break
+                #if index == 3:
+                #    break
                 
             except Exception as e:
                 print(f"Error in main chat processing loop for chat {index}: {str(e)}")
@@ -993,7 +993,7 @@ def read_whatsapp_messages(num_messages=10):
 # Example usage:
 if __name__ == "__main__":
     # Get the last 10 messages from each chat
-    num_messages = 10
+    num_messages = 20
     print(f"Getting last {num_messages} messages from each chat")
     messages = read_whatsapp_messages(num_messages)
     print(messages) 
