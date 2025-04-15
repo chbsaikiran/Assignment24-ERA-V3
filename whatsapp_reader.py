@@ -143,7 +143,31 @@ def parse_whatsapp_timestamp(timestamp_text):
 def get_message_content(message_elem):
     """Helper function to extract message content using multiple methods"""
     try:
-        # First try the most reliable selectors for text content
+        # First check if message is truncated and needs expansion
+        expand_selectors = [
+            'span[data-testid="read-more"]',
+            'div[role="button"][title="Read more"]',
+            'div[role="button"].read-more-button',
+            'span[role="button"].read-more',
+            'div[data-testid="expand-message"]'
+        ]
+        
+        # Try to find and click any "read more" button
+        for selector in expand_selectors:
+            try:
+                expand_buttons = message_elem.find_elements(By.CSS_SELECTOR, selector)
+                for btn in expand_buttons:
+                    if btn.is_displayed():
+                        try:
+                            btn.click()
+                        except:
+                            # If direct click fails, try JavaScript click
+                            message_elem.parent.execute_script("arguments[0].click();", btn)
+                        time.sleep(0.5)  # Wait for expansion
+            except:
+                continue
+
+        # Now try to get the expanded content
         text_selectors = [
             'span.selectable-text.copyable-text',
             'span[data-testid="msg-container"] span.selectable-text',
