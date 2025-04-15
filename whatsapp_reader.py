@@ -732,6 +732,7 @@ def read_whatsapp_messages(num_messages=10):
         group_messages = []
         individual_messages = []
         processed_chats = 0
+        processed_chat_titles = set()  # Track processed chat titles
         
         # Get all chat elements
         print("Looking for chats...")
@@ -788,11 +789,14 @@ def read_whatsapp_messages(num_messages=10):
             try:
                 print(f"\nProcessing chat {index}/{total_chats}")
                 
+                # First try to get the title before clicking to check if already processed
+                chat_title = get_chat_title(driver, chat)
+                if chat_title and chat_title in processed_chat_titles:
+                    print(f"Chat '{chat_title}' already processed, skipping...")
+                    continue
+                
                 # Click the chat and wait for messages
                 try:
-                    # First try to get the title before clicking
-                    chat_title = get_chat_title(driver, chat)
-                    
                     # Scroll chat into view and click
                     driver.execute_script("arguments[0].scrollIntoView(true);", chat)
                     time.sleep(2)  # Wait for scroll to complete
@@ -836,6 +840,12 @@ def read_whatsapp_messages(num_messages=10):
                     if not chat_title:
                         chat_title = get_chat_title(driver, chat) or "Unknown Chat"
                     
+                    # Check again after getting final title
+                    if chat_title in processed_chat_titles:
+                        print(f"Chat '{chat_title}' already processed, skipping...")
+                        continue
+                        
+                    processed_chat_titles.add(chat_title)  # Add to processed set
                     print(f"Processing chat: {chat_title}")
                     
                     # Determine if it's a group or individual chat
@@ -945,8 +955,8 @@ def read_whatsapp_messages(num_messages=10):
                     print(f"Error processing chat {index}: {str(e)}")
                     continue
 
-                #if index == 3:
-                #    break
+                if index == 3:
+                    break
                 
             except Exception as e:
                 print(f"Error in main chat processing loop for chat {index}: {str(e)}")
