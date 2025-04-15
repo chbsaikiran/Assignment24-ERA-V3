@@ -786,11 +786,8 @@ def read_whatsapp_messages(num_messages=10):
         # Process each chat
         for index, chat in enumerate(chats, 1):
             try:
-                # Process chat and collect messages
-                if index == 2:
-                    print("Stopping at chat 2 as requested")
-                    break
-                    
+                print(f"\nProcessing chat {index}/{total_chats}")
+                
                 # Click the chat and wait for messages
                 try:
                     # First try to get the title before clicking
@@ -798,30 +795,48 @@ def read_whatsapp_messages(num_messages=10):
                     
                     # Scroll chat into view and click
                     driver.execute_script("arguments[0].scrollIntoView(true);", chat)
-                    time.sleep(1)
+                    time.sleep(2)  # Wait for scroll to complete
                     
-                    # Try multiple click methods
-                    try:
-                        chat.click()
-                    except:
+                    # Try multiple click methods with retries
+                    max_click_attempts = 3
+                    click_success = False
+                    
+                    for attempt in range(max_click_attempts):
                         try:
-                            driver.execute_script("arguments[0].click();", chat)
+                            # Try direct click
+                            chat.click()
+                            click_success = True
+                            break
                         except:
-                            # Try finding clickable element within the chat
                             try:
-                                clickable = chat.find_element(By.CSS_SELECTOR, 'div[role="gridcell"], div[role="row"]')
-                                clickable.click()
+                                # Try JavaScript click
+                                driver.execute_script("arguments[0].click();", chat)
+                                click_success = True
+                                break
                             except:
-                                print("Failed to click chat")
-                                continue
+                                try:
+                                    # Try finding and clicking a clickable element
+                                    clickable = chat.find_element(By.CSS_SELECTOR, 
+                                        'div[role="gridcell"], div[role="row"], div[tabindex="-1"]')
+                                    clickable.click()
+                                    click_success = True
+                                    break
+                                except:
+                                    print(f"Click attempt {attempt + 1} failed, retrying...")
+                                    time.sleep(1)
                     
-                    time.sleep(3)  # Wait after clicking
+                    if not click_success:
+                        print(f"Failed to click chat {index} after {max_click_attempts} attempts, skipping...")
+                        continue
+                    
+                    # Wait for chat to load
+                    time.sleep(3)
                     
                     # Try to get title again after clicking if we didn't get it before
                     if not chat_title:
                         chat_title = get_chat_title(driver, chat) or "Unknown Chat"
                     
-                    print(f"\nProcessing chat {index}/{total_chats}: {chat_title}")
+                    print(f"Processing chat: {chat_title}")
                     
                     # Determine if it's a group or individual chat
                     is_group = False
@@ -847,11 +862,19 @@ def read_whatsapp_messages(num_messages=10):
                     
                     print(f"Chat type: {'Group' if is_group else 'Individual'}")
                     
-                    # Find messages in this chat
-                    messages = find_messages_in_chat(driver, num_messages)
+                    # Find messages in this chat with retries
+                    max_message_attempts = 3
+                    messages = None
+                    
+                    for attempt in range(max_message_attempts):
+                        messages = find_messages_in_chat(driver, num_messages)
+                        if messages and len(messages) > 0:
+                            break
+                        print(f"Attempt {attempt + 1}: Found {len(messages) if messages else 0} messages")
+                        time.sleep(2)
                     
                     if not messages:
-                        print(f"No messages found in chat {index}")
+                        print(f"No messages found in chat {index} after {max_message_attempts} attempts")
                         continue
                     
                     # Process messages
@@ -900,13 +923,33 @@ def read_whatsapp_messages(num_messages=10):
                             print(f"Added {len(chat_messages)} messages to individual chat")
                     else:
                         print(f"No valid messages found in chat {index}")
+                    
+                    # Return to chat list if not last chat
+                    if index < total_chats:
+                        try:
+                            # Try to click back button or use keyboard shortcut
+                            back_button = driver.find_element(By.CSS_SELECTOR, 
+                                'div[data-testid="back"], span[data-testid="back"], span[data-icon="back"]')
+                            back_button.click()
+                            time.sleep(2)  # Wait for chat list to reload
+                        except:
+                            # If back button not found, try to click chat list area
+                            try:
+                                chat_list = driver.find_element(By.CSS_SELECTOR, 'div#pane-side')
+                                chat_list.click()
+                                time.sleep(2)
+                            except:
+                                print("Warning: Could not return to chat list")
                         
                 except Exception as e:
                     print(f"Error processing chat {index}: {str(e)}")
                     continue
-            
+
+                if index == 2:
+                    break
+                
             except Exception as e:
-                print(f"Error processing chat {index}: {str(e)}")
+                print(f"Error in main chat processing loop for chat {index}: {str(e)}")
                 continue
         
         try:
