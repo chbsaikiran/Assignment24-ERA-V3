@@ -11,6 +11,7 @@ import time
 import sys
 import os
 import platform
+import re
 
 def wait_for_element(driver, selector, timeout=20, by=By.CSS_SELECTOR):
     """Helper function to wait for an element with better error handling"""
@@ -207,6 +208,57 @@ def get_message_content(message_elem):
         print(f"Error getting message content: {str(e)}")
         return None
 
+def get_message_sender(message_elem):
+    """Helper function to extract sender name from message, especially for group chats"""
+    try:
+        # Try multiple methods to get sender name
+        
+        # Method 1: Try data-pre-plain-text attribute (most reliable for group chats)
+        try:
+            metadata_container = message_elem.find_element(By.CSS_SELECTOR, 'div[data-pre-plain-text]')
+            metadata = metadata_container.get_attribute('data-pre-plain-text')
+            if metadata:
+                # Extract time and sender from metadata (format: [HH:mm] Sender Name: )
+                parts = metadata.split(']')
+                if len(parts) > 1:
+                    sender = parts[1].strip().strip(':')
+                    # Remove phone numbers from sender name
+                    sender = sender.split('(')[0].strip()  # Remove anything in parentheses
+                    sender = sender.split('@')[0].strip()  # Remove anything after @
+                    sender = re.sub(r'\+?\d[\d\s-]+', '', sender).strip()  # Remove phone numbers
+                    if sender:
+                        return sender
+        except:
+            pass
+
+        # Method 2: Try direct sender span (common in newer versions)
+        sender_selectors = [
+            'span[data-testid="author"]',
+            'span.author',
+            'span[dir="auto"][aria-label*="Messages from"]',
+            'div[data-testid*="author"] span[dir="auto"]',
+            'div[class*="message-in"] span[dir="auto"]'
+        ]
+        
+        for selector in sender_selectors:
+            try:
+                sender_elem = message_elem.find_element(By.CSS_SELECTOR, selector)
+                if sender_elem:
+                    sender = sender_elem.text.strip()
+                    # Remove phone numbers from sender name
+                    sender = sender.split('(')[0].strip()
+                    sender = sender.split('@')[0].strip()
+                    sender = re.sub(r'\+?\d[\d\s-]+', '', sender).strip()
+                    if sender:
+                        return sender
+            except:
+                continue
+        
+        return "Unknown"
+    except Exception as e:
+        print(f"Error getting sender name: {str(e)}")
+        return "Unknown"
+
 def get_message_timestamp(message_elem):
     """Helper function to extract message timestamp using multiple methods"""
     try:
@@ -334,7 +386,9 @@ def find_messages_in_chat(driver, num_messages):
             'div[data-testid="conversation-panel-messages"]',
             'div.message-list',
             'div[role="region"][aria-label*="Message list"]',
-            'div[data-testid="msg-container"]'
+            'div[data-testid="msg-container"]',
+            'div[data-testid="message-list"]',
+            'div#main div[role="region"]'  # Main chat container
         ]
         
         message_view = None
@@ -348,17 +402,20 @@ def find_messages_in_chat(driver, num_messages):
                 continue
         
         if message_view:
-            # Scroll to bottom and then back up to ensure messages are loaded
-            driver.execute_script("""
-                const view = arguments[0];
-                // Scroll to bottom
-                view.scrollTop = view.scrollHeight;
-                // Wait a bit and scroll up
-                setTimeout(() => {
-                    view.scrollTop = 0;
-                }, 500);
-            """, message_view)
-            time.sleep(3)  # Wait for scroll and load
+            # Scroll to load more messages
+            try:
+                driver.execute_script("""
+                    const view = arguments[0];
+                    // Scroll to bottom first
+                    view.scrollTop = view.scrollHeight;
+                    // Wait a bit and then scroll up
+                    setTimeout(() => {
+                        view.scrollTop = 0;
+                    }, 1000);
+                """, message_view)
+                time.sleep(3)  # Wait for messages to load
+            except Exception as e:
+                print(f"Scroll error: {str(e)}")
         
         # Try multiple approaches to find messages
         message_selectors = [
@@ -369,37 +426,67 @@ def find_messages_in_chat(driver, num_messages):
             'div[data-pre-plain-text]',
             'div.copyable-text',
             'div[class*="message"]',
-            # Add more specific selectors
-            'div[data-id]',
             'div._21Ahp',
-            'div[tabindex="-1"]'
+            'div[tabindex="-1"]',
+            'div[class*="message-group"]',
+            'div[class*="group-message"]',
+            'div.message',
+            'div[data-id]',
+            'div[class*="focusable-list-item"]'  # Common class for both individual and group messages
         ]
         
         all_messages = []
         print("Searching for messages with multiple selectors...")
         
-        for selector in message_selectors:
+        # First try the most reliable method - direct message containers
+        primary_selectors = [
+            'div[data-testid="msg-container"]',
+            'div.message-in, div.message-out',
+            'div[data-pre-plain-text]'
+        ]
+        
+        for selector in primary_selectors:
             try:
                 elements = driver.find_elements(By.CSS_SELECTOR, selector)
                 if elements:
-                    print(f"Found {len(elements)} potential messages with selector '{selector}'")
-                    # Add unique elements to all_messages
-                    for elem in elements:
-                        if elem not in all_messages:
-                            text = get_message_content(elem)
-                            if text:
-                                all_messages.append(elem)
+                    print(f"Found {len(elements)} messages with primary selector '{selector}'")
+                    all_messages.extend(elements)
+                    break  # If we find messages with a primary selector, use those
             except Exception as e:
-                print(f"Error with selector '{selector}': {str(e)}")
-                continue
+                print(f"Error with primary selector '{selector}': {str(e)}")
+        
+        # If no messages found with primary selectors, try others
+        if not all_messages:
+            for selector in message_selectors:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        print(f"Found {len(elements)} potential messages with selector '{selector}'")
+                        for elem in elements:
+                            if elem not in all_messages:
+                                # Verify this is actually a message
+                                has_content = (
+                                    get_message_content(elem) or  # Has actual text content
+                                    elem.get_attribute('data-pre-plain-text') or  # Has message metadata
+                                    elem.find_elements(By.CSS_SELECTOR, 'span.selectable-text, div.copyable-text') or  # Has text elements
+                                    elem.find_elements(By.CSS_SELECTOR, 'span[data-testid="author"]')  # Has author (group messages)
+                                )
+                                if has_content:
+                                    all_messages.append(elem)
+                except Exception as e:
+                    print(f"Error with selector '{selector}': {str(e)}")
+                    continue
+        
+        # Remove duplicates while preserving order
+        all_messages = list(dict.fromkeys(all_messages))
         
         if all_messages:
-            print(f"Found total of {len(all_messages)} valid messages across all selectors")
+            print(f"Found total of {len(all_messages)} valid messages")
             # Get the last N messages
             messages = all_messages[-num_messages:] if len(all_messages) > num_messages else all_messages
             return messages
         
-        # If no messages found, try JavaScript approach
+        # If still no messages found, try JavaScript approach
         print("No messages found with selectors, trying JavaScript approach...")
         try:
             messages = driver.execute_script("""
@@ -411,25 +498,21 @@ def find_messages_in_chat(driver, num_messages):
                         'div[data-testid="msg-container"]',
                         '.message-in, .message-out',
                         'div[data-pre-plain-text]',
-                        'div.copyable-text'
+                        'div.copyable-text',
+                        'div[class*="message-group"]',
+                        'div[class*="group-message"]',
+                        'div[class*="focusable-list-item"]'
                     ];
                     
                     for (const selector of selectors) {
-                        document.querySelectorAll(selector).forEach(el => messages.add(el));
-                    }
-                    
-                    // If no messages found, try finding elements with message characteristics
-                    if (messages.size === 0) {
-                        document.querySelectorAll('div').forEach(el => {
-                            const hasText = el.querySelector('span.selectable-text, span[dir="ltr"], span[dir="auto"]');
-                            const hasTime = el.querySelector('span[data-testid="msg-time"]');
+                        document.querySelectorAll(selector).forEach(el => {
+                            // Verify it's a message
+                            const hasText = el.querySelector('span.selectable-text, div.copyable-text');
                             const hasMetadata = el.getAttribute('data-pre-plain-text');
+                            const hasAuthor = el.querySelector('span[data-testid="author"]');
                             
-                            if ((hasText && hasTime) || hasMetadata) {
-                                const text = hasText ? hasText.textContent.trim() : '';
-                                if (text) {
-                                    messages.add(el);
-                                }
+                            if ((hasText && hasText.textContent.trim()) || hasMetadata || hasAuthor) {
+                                messages.add(el);
                             }
                         });
                     }
@@ -446,39 +529,6 @@ def find_messages_in_chat(driver, num_messages):
                 return messages
         except Exception as e:
             print(f"JavaScript approach failed: {str(e)}")
-        
-        # One final attempt with a more aggressive approach
-        print("Trying final aggressive message search...")
-        try:
-            messages = driver.execute_script("""
-                function findAnyPossibleMessage() {
-                    const messages = new Set();
-                    
-                    // Look for any element that might be a message
-                    document.querySelectorAll('div').forEach(el => {
-                        // Check for any text content
-                        const hasText = el.querySelector('span') && el.textContent.trim();
-                        // Check for typical message attributes
-                        const hasMessageAttr = el.getAttribute('data-id') || 
-                                            el.getAttribute('data-pre-plain-text') ||
-                                            el.querySelector('span[data-testid="msg-time"]');
-                        
-                        if (hasText && hasMessageAttr) {
-                            messages.add(el);
-                        }
-                    });
-                    
-                    return Array.from(messages);
-                }
-                return findAnyPossibleMessage();
-            """)
-            
-            if messages:
-                print(f"Found {len(messages)} messages in final attempt")
-                messages = messages[-num_messages:] if len(messages) > num_messages else messages
-                return messages
-        except Exception as e:
-            print(f"Final attempt failed: {str(e)}")
         
         print("No messages found after all attempts")
         return None
@@ -678,9 +728,10 @@ def read_whatsapp_messages(num_messages=10):
         print("Successfully connected to WhatsApp Web!")
         time.sleep(5)  # Increased final wait for stability
         
-        # Initialize result strings
-        group_messages = []  # string1 collection
-        individual_messages = []  # string2 collection
+        # Process chats and collect messages
+        group_messages = []
+        individual_messages = []
+        processed_chats = 0
         
         # Get all chat elements
         print("Looking for chats...")
@@ -732,68 +783,46 @@ def read_whatsapp_messages(num_messages=10):
         total_chats = len(chats)
         print(f"Found {total_chats} chats to process...")
         
-        processed_chats = 0
+        # Process each chat
         for index, chat in enumerate(chats, 1):
             try:
-                print(f"\nProcessing chat {index}/{total_chats}")
+                # Process chat and collect messages
                 if index == 2:
                     print("Stopping at chat 2 as requested")
                     break
-                
-                # First try to get the title before clicking
-                chat_title = get_chat_title(driver, chat)
-                
-                # Scroll chat into view and click
-                driver.execute_script("arguments[0].scrollIntoView(true);", chat)
-                time.sleep(1)
-                driver.execute_script("arguments[0].click();", chat)
-                time.sleep(3)  # Increased wait time after clicking
-                
-                # Find messages in this chat
-                messages = find_messages_in_chat(driver, num_messages)
-                
-                if not messages:
-                    print(f"No messages found in chat {index}")
-                    continue
-                
-                # Process messages
-                chat_messages = []
-                processed_messages = 0
-                
-                for message in messages:
+                    
+                # Click the chat and wait for messages
+                try:
+                    # First try to get the title before clicking
+                    chat_title = get_chat_title(driver, chat)
+                    
+                    # Scroll chat into view and click
+                    driver.execute_script("arguments[0].scrollIntoView(true);", chat)
+                    time.sleep(1)
+                    
+                    # Try multiple click methods
                     try:
-                        # Get message text
-                        message_text = get_message_content(message)
-                        if not message_text:
-                            print("No text content found in message")
-                            continue
-                        
-                        # Get sender information
+                        chat.click()
+                    except:
                         try:
-                            metadata_container = message.find_element(By.CSS_SELECTOR, 'div[data-pre-plain-text]')
-                            metadata = metadata_container.get_attribute('data-pre-plain-text')
-                            if metadata and ']' in metadata:
-                                sender = metadata.split(']')[1].strip().strip(':')
-                            else:
-                                sender = "Unknown"
+                            driver.execute_script("arguments[0].click();", chat)
                         except:
-                            sender = "Unknown"
-                        
-                        # Add the message
-                        chat_messages.append(f"{sender}: {message_text}")
-                        processed_messages += 1
-                        
-                    except Exception as e:
-                        print(f"Error processing message: {str(e)}")
-                        continue
-                
-                print(f"\nChat {index} summary:")
-                print(f"- Total messages found: {len(messages)}")
-                print(f"- Messages successfully processed: {processed_messages}")
-                print(f"- Messages after filtering (no links/attachments): {len(chat_messages)}")
-                
-                if chat_messages:
-                    processed_chats += 1
+                            # Try finding clickable element within the chat
+                            try:
+                                clickable = chat.find_element(By.CSS_SELECTOR, 'div[role="gridcell"], div[role="row"]')
+                                clickable.click()
+                            except:
+                                print("Failed to click chat")
+                                continue
+                    
+                    time.sleep(3)  # Wait after clicking
+                    
+                    # Try to get title again after clicking if we didn't get it before
+                    if not chat_title:
+                        chat_title = get_chat_title(driver, chat) or "Unknown Chat"
+                    
+                    print(f"\nProcessing chat {index}/{total_chats}: {chat_title}")
+                    
                     # Determine if it's a group or individual chat
                     is_group = False
                     try:
@@ -801,41 +830,104 @@ def read_whatsapp_messages(num_messages=10):
                         group_indicators = driver.find_elements(By.CSS_SELECTOR, 
                             'span[data-testid="group-info-drawer-subject-input"], ' + 
                             'div[data-testid="group-info-drawer"], ' +
-                            'span[data-icon="groups"]'
+                            'span[data-icon="groups"], ' +
+                            'div[data-testid="group-info-drawer-body"], ' +
+                            'div[data-testid="chat-info-drawer-group-participants-section"]'
                         )
                         is_group = len(group_indicators) > 0
+                        if not is_group:
+                            # Try additional group indicators
+                            try:
+                                group_title = driver.find_element(By.CSS_SELECTOR, 'div[title*="group"]')
+                                is_group = True
+                            except:
+                                pass
                     except:
-                        # If we can't determine, assume individual chat
                         pass
                     
-                    # Format and add messages to appropriate list
-                    formatted_messages = f"{chat_title}:\n" + "\n".join(chat_messages) + "\n\n"
-                    if is_group:
-                        group_messages.append(formatted_messages)
-                        print(f"Added {len(chat_messages)} messages to group chat")
-                    else:
-                        individual_messages.append(formatted_messages)
-                        print(f"Added {len(chat_messages)} messages to individual chat")
-                else:
-                    print(f"No valid messages found in chat {index}")
+                    print(f"Chat type: {'Group' if is_group else 'Individual'}")
                     
+                    # Find messages in this chat
+                    messages = find_messages_in_chat(driver, num_messages)
+                    
+                    if not messages:
+                        print(f"No messages found in chat {index}")
+                        continue
+                    
+                    # Process messages
+                    chat_messages = []
+                    processed_messages = 0
+                    
+                    for message in messages:
+                        try:
+                            # Get message text
+                            message_text = get_message_content(message)
+                            if not message_text:
+                                continue
+                            
+                            # Get sender information
+                            sender = get_message_sender(message) if is_group else "You"
+                            
+                            # For individual chats, determine if message is incoming or outgoing
+                            if not is_group:
+                                try:
+                                    if message.get_attribute("class"):
+                                        if "message-in" in message.get_attribute("class"):
+                                            sender = chat_title
+                                except:
+                                    pass
+                            
+                            # Add the message
+                            chat_messages.append(f"{sender}: {message_text}")
+                            processed_messages += 1
+                            
+                        except Exception as e:
+                            print(f"Error processing message: {str(e)}")
+                            continue
+                    
+                    if chat_messages:
+                        processed_chats += 1
+                        # Format and add messages to appropriate list
+                        if is_group:
+                            # For group chats, just show group name and messages
+                            formatted_messages = f"Group: {chat_title}\n" + "\n".join(chat_messages) + "\n\n"
+                            group_messages.append(formatted_messages)
+                            print(f"Added {len(chat_messages)} messages to group chat")
+                        else:
+                            # For individual chats, keep the original format
+                            formatted_messages = f"{chat_title}:\n" + "\n".join(chat_messages) + "\n\n"
+                            individual_messages.append(formatted_messages)
+                            print(f"Added {len(chat_messages)} messages to individual chat")
+                    else:
+                        print(f"No valid messages found in chat {index}")
+                        
+                except Exception as e:
+                    print(f"Error processing chat {index}: {str(e)}")
+                    continue
+            
             except Exception as e:
                 print(f"Error processing chat {index}: {str(e)}")
                 continue
         
-        print("\nProcessing Summary:")
-        print(f"Total chats processed: {processed_chats}")
-        print(f"Group chats with messages: {len(group_messages)}")
-        print(f"Individual chats with messages: {len(individual_messages)}")
-        
-        # Combine all messages in the required format
-        final_string = "".join(group_messages) + "".join(individual_messages)
-        if not final_string:
-            return "No messages found in the specified time range. This could be because:\n" + \
-                   "1. No messages were sent during this time period\n" + \
-                   "2. The messages were filtered out (links/attachments)\n" + \
-                   "3. There were issues reading the message timestamps"
-        return final_string
+        try:
+            # Print processing summary after all chats are processed
+            print("\nProcessing Summary:")
+            print(f"Total chats processed: {processed_chats}")
+            print(f"Group chats with messages: {len(group_messages)}")
+            print(f"Individual chats with messages: {len(individual_messages)}")
+            
+            # Combine all messages in the required format
+            final_string = "".join(group_messages) + "".join(individual_messages)
+            if not final_string:
+                return "No messages found in the specified time range. This could be because:\n" + \
+                       "1. No messages were sent during this time period\n" + \
+                       "2. The messages were filtered out (links/attachments)\n" + \
+                       "3. There were issues reading the message timestamps"
+            return final_string
+            
+        except Exception as e:
+            print(f"Error generating summary: {str(e)}")
+            return "Error processing messages. Please try again."
         
     except TimeoutException as e:
         return "Timeout waiting for WhatsApp Web to load. Please check your internet connection and try again."
