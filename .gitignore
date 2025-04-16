@@ -1,0 +1,9 @@
+.env
+*.txt
+*.json
+*.log
+*.csv
+*.xlsx
+*.xls
+*.doc
+*.docx
