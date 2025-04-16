@@ -7,3 +7,10 @@
 *.xls
 *.doc
 *.docx
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+

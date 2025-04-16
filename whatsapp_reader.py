@@ -979,7 +979,7 @@ def read_whatsapp_messages(num_messages=10):
                     print(f"Error processing chat {index}: {str(e)}")
                     continue
 
-                if index == 3:
+                if index == 1:
                     break
                 
             except Exception as e:
@@ -1108,12 +1108,12 @@ def write_top_messages(messages, output_file="top_messages.txt"):
         print(f"Error writing top messages: {str(e)}")
 
 # Example usage:
-if __name__ == "__main__":
-    # Get the last 10 messages from each chat
-    num_messages = 20
-    print(f"Getting last {num_messages} messages from each chat")
-    messages = read_whatsapp_messages(num_messages)
-    print(messages)
-    with open("output.txt", "w", encoding="utf-8") as file:
-        file.write(messages)
-    write_top_messages(messages) 
+# if __name__ == "__main__":
+#     # Get the last 10 messages from each chat
+#     num_messages = 20
+#     print(f"Getting last {num_messages} messages from each chat")
+#     messages = read_whatsapp_messages(num_messages)
+#     print(messages)
+#     with open("output.txt", "w", encoding="utf-8") as file:
+#         file.write(messages)
+#     write_top_messages(messages) 
