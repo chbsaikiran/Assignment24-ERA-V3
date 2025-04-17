@@ -1,45 +1,62 @@
 document.addEventListener('DOMContentLoaded', function() {
-  const button = document.getElementById('readMessages');
-  const messageCountInput = document.getElementById('messageCount');
-  const status = document.getElementById('status');
+  const processButton = document.getElementById('processButton');
+  const queryInput = document.getElementById('queryInput');
+  const statusDiv = document.getElementById('status');
 
-  // Load saved message count
-  chrome.storage.local.get(['messageCount'], function(result) {
-    if (result.messageCount) {
-      messageCountInput.value = result.messageCount;
-    }
-  });
-
-  // Save message count when changed
-  messageCountInput.addEventListener('change', function() {
-    chrome.storage.local.set({ messageCount: messageCountInput.value });
-  });
-
-  button.addEventListener('click', async function() {
-    const count = parseInt(messageCountInput.value);
+  processButton.addEventListener('click', async function() {
+    const query = queryInput.value.trim();
     
-    if (count < 1 || count > 50) {
-      status.textContent = 'Please enter a number between 1 and 50';
-      status.className = 'error';
+    if (!query) {
+      showStatus('Please enter a query', false);
       return;
     }
 
-    status.textContent = 'Starting message reader...';
-    
     try {
-      const response = await fetch(`http://localhost:8000/read_messages/${count}`);
-      const data = await response.json();
+      processButton.disabled = true;
+      processButton.textContent = 'Processing...';
       
+      const response = await fetch('http://127.0.0.1:8000/process_query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          query: query
+        })
+      });
+
+      const data = await response.json();
+
       if (response.ok) {
-        status.textContent = data.message;
-        status.className = 'success';
+        showStatus('Query processed successfully!', true);
       } else {
-        status.textContent = `Error: ${data.detail}`;
-        status.className = 'error';
+        let errorMessage = 'An error occurred';
+        if (data.detail) {
+          errorMessage = typeof data.detail === 'object' 
+            ? JSON.stringify(data.detail) 
+            : data.detail;
+        }
+        showStatus(`Error: ${errorMessage}`, false);
+        console.error('Server response:', data);
       }
     } catch (error) {
-      status.textContent = `Error: ${error.message}. Make sure the server is running.`;
-      status.className = 'error';
+      console.error('Error details:', error);
+      showStatus('Error connecting to server. Please make sure the server is running.', false);
+    } finally {
+      processButton.disabled = false;
+      processButton.textContent = 'Process Query';
     }
   });
+
+  function showStatus(message, isSuccess) {
+    statusDiv.textContent = message;
+    statusDiv.style.display = 'block';
+    statusDiv.className = isSuccess ? 'success' : 'error';
+    
+    // Hide status after 5 seconds
+    setTimeout(() => {
+      statusDiv.style.display = 'none';
+    }, 5000);
+  }
 }); 

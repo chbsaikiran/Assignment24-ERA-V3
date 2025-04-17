@@ -560,7 +560,7 @@ def find_messages_in_chat(driver, num_messages):
         print(f"Error finding messages: {str(e)}")
         return None
 
-def read_whatsapp_messages(num_messages1):
+def read_whatsapp_messages(num_messages1=10, num_chats1=2):
     """
     Read the last N WhatsApp messages from web.whatsapp.com for each chat.
     
@@ -571,6 +571,7 @@ def read_whatsapp_messages(num_messages1):
         str: Concatenated string of all group and individual chat messages
     """
     num_messages = int(num_messages1)
+    num_chats = int(num_chats1)
     driver = None
     try:
         print("Setting up Chrome WebDriver...")
@@ -871,7 +872,7 @@ def read_whatsapp_messages(num_messages1):
                         continue
                         
                     processed_chat_titles.add(chat_title)  # Add to processed set
-                    print(f"Processing chat: {chat_title}")
+                    #print(f"Processing chat: {chat_title}")
                     
                     # Determine if it's a group or individual chat
                     is_group = False
@@ -948,12 +949,18 @@ def read_whatsapp_messages(num_messages1):
                         # Format and add messages to appropriate list
                         if is_group:
                             # For group chats, just show group name and messages
-                            formatted_messages = f"Group: {chat_title}\n" + "\n".join(chat_messages) + "\n\n"
+                            if(len(chat_title) < 20):
+                                formatted_messages = f"Group: {chat_title}\n" + "\n".join(chat_messages) + "\n\n"
+                            else:
+                                formatted_messages = f"Group: {chat_title[:20]}...\n" + "\n".join(chat_messages) + "\n\n"
                             group_messages.append(formatted_messages)
                             print(f"Added {len(chat_messages)} messages to group chat")
                         else:
                             # For individual chats, keep the original format
-                            formatted_messages = f"{chat_title}:\n" + "\n".join(chat_messages) + "\n\n"
+                            if(len(chat_title) < 20):
+                                formatted_messages = f"{chat_title}:\n" + "\n".join(chat_messages) + "\n\n"
+                            else:
+                                formatted_messages = f"{chat_title[:20]}...\n" + "\n".join(chat_messages) + "\n\n"
                             individual_messages.append(formatted_messages)
                             print(f"Added {len(chat_messages)} messages to individual chat")
                     else:
@@ -980,7 +987,7 @@ def read_whatsapp_messages(num_messages1):
                     print(f"Error processing chat {index}: {str(e)}")
                     continue
 
-                if index == 1:
+                if index == num_chats:
                     break
                 
             except Exception as e:
