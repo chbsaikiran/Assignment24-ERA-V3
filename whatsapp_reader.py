@@ -1032,88 +1032,80 @@ def read_whatsapp_messages(num_messages1=10, num_chats1=2):
             except:
                 pass
 
-def write_top_messages(messages, output_file="top_messages.txt"):
+def write_top_messages_to_string(messages, top_n1=4):
     """
-    Write top 4 lengthiest messages from each chat while maintaining their order.
+    Return top N lengthiest messages from each chat while maintaining their order.
     Messages can span multiple lines and start with 'MessageN:' pattern.
-    
+
     Args:
         messages (str): String containing messages from all chats
-        output_file (str): Name of the output file (default: top_messages.txt)
+        top_n (int): Number of top lengthiest messages to return per chat
+
+    Returns:
+        str: Formatted string with top messages per chat
     """
+    top_n = int(top_n1)
     try:
+        output = []
+
         # Split the input string into individual chats
         chats = messages.strip().split('\n\n')
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            for chat in chats:
-                if not chat.strip():
-                    continue
-                    
-                # Split chat into lines
-                chat_lines = chat.strip().split('\n')
-                if not chat_lines:
-                    continue
-                
-                # Get chat title (first line)
-                chat_title = chat_lines[0]
-                f.write(f"{chat_title}\n")
-                
-                # Process messages (skip the title line)
-                current_message = []
-                messages_dict = {}
-                
-                # Group multi-line messages
-                for line in chat_lines[1:]:
-                    # Check if line starts a new message
-                    if line.startswith('Message'):
-                        # If we have a previous message, save it
-                        if current_message:
-                            msg_num = current_message[0].split(':')[0]  # Get MessageN part
-                            messages_dict[msg_num] = '\n'.join(current_message)
-                        current_message = [line]
-                    else:
-                        # Append line to current message if it exists
-                        if current_message:
-                            current_message.append(line)
-                
-                # Save the last message if exists
-                if current_message:
-                    msg_num = current_message[0].split(':')[0]
-                    messages_dict[msg_num] = '\n'.join(current_message)
-                
-                # Convert to list of tuples (message_num, content)
-                chat_messages = [(k, v) for k, v in messages_dict.items()]
-                
-                # If 4 or fewer messages, write them all
-                if len(chat_messages) <= 4:
-                    for _, msg in chat_messages:
-                        f.write(f"{msg}\n")
+
+        for chat in chats:
+            if not chat.strip():
+                continue
+
+            chat_lines = chat.strip().split('\n')
+            if not chat_lines:
+                continue
+
+            chat_title = chat_lines[0]
+            output.append(chat_title)
+
+            current_message = []
+            messages_dict = {}
+
+            for line in chat_lines[1:]:
+                if line.startswith('Message'):
+                    if current_message:
+                        msg_num = current_message[0].split(':')[0]
+                        messages_dict[msg_num] = '\n'.join(current_message)
+                    current_message = [line]
                 else:
-                    # Create list of (index, message_num, message, length) tuples
-                    message_info = [(i, msg_num, content, len(content)) 
-                                  for i, (msg_num, content) in enumerate(chat_messages)]
-                    
-                    # Sort by length to get top 4 lengthiest messages
-                    top_indices = sorted(
-                        range(len(message_info)), 
-                        key=lambda i: message_info[i][3], 
-                        reverse=True
-                    )[:4]
-                    
-                    # Sort the indices to maintain original message order
-                    top_indices.sort()
-                    
-                    # Write messages in original order
-                    for idx in top_indices:
-                        f.write(f"{chat_messages[idx][1]}\n")
-                
-                f.write("\n")  # Add blank line between chats
-        
-        print(f"Successfully wrote top messages to {output_file}")
-        
+                    if current_message:
+                        current_message.append(line)
+
+            if current_message:
+                msg_num = current_message[0].split(':')[0]
+                messages_dict[msg_num] = '\n'.join(current_message)
+
+            chat_messages = [(k, v) for k, v in messages_dict.items()]
+
+            if len(chat_messages) <= top_n:
+                for _, msg in chat_messages:
+                    output.append(msg)
+            else:
+                message_info = [(i, msg_num, content, len(content)) 
+                                for i, (msg_num, content) in enumerate(chat_messages)]
+
+                top_indices = sorted(
+                    range(len(message_info)), 
+                    key=lambda i: message_info[i][3], 
+                    reverse=True
+                )[:top_n]
+
+                top_indices.sort()
+
+                for idx in top_indices:
+                    output.append(chat_messages[idx][1])
+
+            output.append('')  # Blank line between chats
+
+        return '\n'.join(output)
+
     except Exception as e:
-        print(f"Error writing top messages: {str(e)}")
+        return f"Error processing messages: {str(e)}"
+
 
 # Example usage:
 # if __name__ == "__main__":
