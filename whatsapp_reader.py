@@ -560,7 +560,7 @@ def find_messages_in_chat(driver, num_messages):
         print(f"Error finding messages: {str(e)}")
         return None
 
-def read_whatsapp_messages(num_messages=10):
+def read_whatsapp_messages(num_messages1):
     """
     Read the last N WhatsApp messages from web.whatsapp.com for each chat.
     
@@ -570,6 +570,7 @@ def read_whatsapp_messages(num_messages=10):
     Returns:
         str: Concatenated string of all group and individual chat messages
     """
+    num_messages = int(num_messages1)
     driver = None
     try:
         print("Setting up Chrome WebDriver...")
