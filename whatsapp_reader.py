@@ -1034,86 +1034,108 @@ def read_whatsapp_messages(num_messages1=10, num_chats1=2):
 
 def write_top_messages_to_string(messages, top_n1=4):
     """
-    Return top N lengthiest messages from each chat while maintaining their order.
+    Write top 4 lengthiest messages from each chat while maintaining their order.
     Messages can span multiple lines and start with 'MessageN:' pattern.
-
+    
     Args:
         messages (str): String containing messages from all chats
-        top_n (int): Number of top lengthiest messages to return per chat
-
-    Returns:
-        str: Formatted string with top messages per chat
+        output_file (str): Name of the output file (default: top_messages.txt)
     """
     top_n = int(top_n1)
+    output = []
     try:
-        output = []
-
         # Split the input string into individual chats
         chats = messages.strip().split('\n\n')
-
+        
         for chat in chats:
             if not chat.strip():
                 continue
-
+                
+            # Split chat into lines
             chat_lines = chat.strip().split('\n')
             if not chat_lines:
                 continue
-
+            
+            # Get chat title (first line)
             chat_title = chat_lines[0]
-            output.append(chat_title)
-
+            output.append(f"{chat_title}\n")
+            
+            # Process messages (skip the title line)
             current_message = []
             messages_dict = {}
-
+            
+            # Group multi-line messages
             for line in chat_lines[1:]:
+                # Check if line starts a new message
                 if line.startswith('Message'):
+                    # If we have a previous message, save it
                     if current_message:
-                        msg_num = current_message[0].split(':')[0]
+                        msg_num = current_message[0].split(':')[0]  # Get MessageN part
                         messages_dict[msg_num] = '\n'.join(current_message)
                     current_message = [line]
                 else:
+                    # Append line to current message if it exists
                     if current_message:
                         current_message.append(line)
-
+            
+            # Save the last message if exists
             if current_message:
                 msg_num = current_message[0].split(':')[0]
                 messages_dict[msg_num] = '\n'.join(current_message)
-
+            
+            # Convert to list of tuples (message_num, content)
             chat_messages = [(k, v) for k, v in messages_dict.items()]
-
+            
+            # If 4 or fewer messages, write them all
             if len(chat_messages) <= top_n:
                 for _, msg in chat_messages:
-                    output.append(msg)
+                    output.append((f"{msg}\n"))
             else:
+                # Create list of (index, message_num, message, length) tuples
                 message_info = [(i, msg_num, content, len(content)) 
-                                for i, (msg_num, content) in enumerate(chat_messages)]
-
+                              for i, (msg_num, content) in enumerate(chat_messages)]
+                
+                # Sort by length to get top 4 lengthiest messages
                 top_indices = sorted(
                     range(len(message_info)), 
                     key=lambda i: message_info[i][3], 
                     reverse=True
                 )[:top_n]
-
+                
+                # Sort the indices to maintain original message order
                 top_indices.sort()
-
+                
+                # Write messages in original order
                 for idx in top_indices:
-                    output.append(chat_messages[idx][1])
-
-            output.append('')  # Blank line between chats
-
-        return '\n'.join(output)
-
+                    output.append((f"{chat_messages[idx][1]}\n"))
+            
+            output.append("\n")  # Add blank line between chats
+        
+        #print(f"Successfully wrote top messages to {output_file}")
+        
     except Exception as e:
-        return f"Error processing messages: {str(e)}"
+        print(f"Error writing top messages: {str(e)}")
+
+    return '\n'.join(output)
 
 
 # Example usage:
-# if __name__ == "__main__":
-#     # Get the last 10 messages from each chat
-#     num_messages = 20
-#     print(f"Getting last {num_messages} messages from each chat")
-#     messages = read_whatsapp_messages(num_messages)
-#     print(messages)
-#     with open("output.txt", "w", encoding="utf-8") as file:
-#         file.write(messages)
-#     write_top_messages(messages) 
+#if __name__ == "__main__":
+#    messages = '''SMLRFO M & W CSL:
+#Message0: Today's weather FORECAST
+#Right now, scattered rains across Khammam, Mahabubabad, Suryapet are happening which would reduce soon. It may be Cloudy till noon. East Telangana would be dry thereafter.
+#Central and South Telangana including Hyderabad city may get scattered storms just like the last few days, isolated hails, strong winds, but not widespread.
+# - Telangana Weatherman
+#Message1: tail-in PREMRAJ +91 94405 36116 forwarded Forwarded video-pip media-play msg-video 9:56 15:36 2
+#Message2: J-502, MMC for April 2025, M.Nagaraju
+#Message3: Even in Telangana electricity bill  has been increased after the congress govt. has come into power even though consumption is same.
+#Message4: MMC for the month of April 2025,from F-203/SMLR
+#Message5: All governments are same and interested in vote bank politics. Free power to 75 percent of domestic users and disproportionate higher rates to producers who give funds are the factors for increase in the bills.
+#Message6: tail-in Venkataiah Ambati +91 63031 61530 forwarded Forwarded Adobe Scan 16 Apr 2025.pdf 1 page • PDF • 663 kB • audio-download 08:33 forward-chat
+#Message7: Today's FORECAST
+#Isolated - scattered rains ahead in South. East and North Telangana would be mainly dry.
+#Hyderabad may have only isolated storms this evening. Rains only in 1 or 2 places and it would be dry in most parts.
+# - Telangana Weatherman
+#Message8: Tomorrow GHMC bill collector is coming to our colony for collection of property tax. He will be available in the club hall ground floor from 10.00 am to 1.00 pm. Residents may please utilise the opportunity.
+#Message9: tail-in D D Krishna Bhagavan +91 98852 48549 forwarded Forwarded ic-hd-label-small 12:46 forward-chat'''
+#    print(write_top_messages_to_string(messages,11)) 

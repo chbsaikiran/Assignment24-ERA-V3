@@ -118,7 +118,8 @@ async def process_query(request: QueryRequest):
         
         service = get_gmail_service()
         
-        system_prompt = """You are a agent which reads whatsapp messages and then if asked finds top 4 lengthy whatsapp messages from them and then either mail the read whatsapp messages or top 4 lengthy whatsapp messages based on the prompt. Respond with EXACTLY ONE of these formats:
+        system_prompt = """You are a agent which reads whatsapp messages and then does one of the two either mail messages as it is gmail ID or if asked find top N lengthy whatsapp messages from them, get them and then mail to gmail ID.
+        Respond with EXACTLY ONE of these formats:
         1. FUNCTION_CALL:python_function_name|input1|input2|...|inputN
         2. FINAL_ANSWER:Message sent!
         
